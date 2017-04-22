@@ -21,4 +21,28 @@ class Users extends Service
     {
         return $this->get(null, $param);
     }
+
+    public function getById($id)
+    {
+        return $this->get($id);
+    }
+
+    public function getByProject($id)
+    {
+        return $this->get(null, ['project' => $id]);
+    }
+
+    public function edit($id, $data) {
+        return $this->put($id, [], $data);
+    }
+
+    public function editPartially($id, $data)
+    {
+        return $this->patch($id, [], $data);
+    }
+
+    public function remove($id)
+    {
+        return $this->delete($id);
+    }
 }
