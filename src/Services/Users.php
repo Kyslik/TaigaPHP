@@ -27,9 +27,9 @@ class Users extends Service
         return $this->get($id);
     }
 
-    public function getByProject($id)
+    public function create($data)
     {
-        return $this->get(null, ['project' => $id]);
+        return $this->post(null, [], $data);
     }
 
     public function edit($id, $data) {
