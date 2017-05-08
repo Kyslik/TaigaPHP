@@ -7,22 +7,29 @@ use TZK\Taiga\Exceptions\TaigaException;
 
 class Taiga extends RestClient
 {
+    protected static $HEADER_MAP = [
+        'language' => [
+            'header' => 'Accept-Language'
+        ],
+        'authToken' => [
+            'header' => 'Authorization', 
+            'prefix' => 'Bearer '
+        ]
+    ];
 
-    /**
-     * @var array
-     */
     private $services = [];
 
-
-    public function __construct($baseUrl, $token = null, $language = 'en')
+    public function __construct($baseUrl, $token, array $options = [])
     {
-        parent::__construct($baseUrl);
-        $this->setAuthToken($token);
-        $this->setLanguage($language);
+        parent::__construct($baseUrl, $token);
+        $this->curl->setHeader('Authorization', 'Bearer '.$token);
+
+        foreach($options as $header => $value)
+            $this->{'set'.ucfirst($header)}($value);
 
         foreach (glob(__DIR__.'/Services/*.php') as $service) {
             $basename = basename($service, '.php');
-            $class    = 'TZK\\Taiga\\Services\\'.$basename;
+            $class = 'TZK\\Taiga\\Services\\'.$basename;
 
             if (class_exists($class)) {
                 $instance = new $class($this);
@@ -33,46 +40,11 @@ class Taiga extends RestClient
         }
     }
 
-
-    /**
-     * Set authorization token.
-     *
-     * @param null|string $token
-     *
-     * @return $this
-     */
-    protected function setAuthToken($token = null)
-    {
-        if ( ! is_null($token)) {
-            $this->curl->setHeader('Authorization', 'Bearer '.$token);
-        }
-
-        return $this;
-    }
-
-
-    /**
-     * Set language header.
-     *
-     * @param null|string $language
-     *
-     * @return $this
-     */
-    protected function setLanguage($language = null)
-    {
-        if ( ! is_null($language)) {
-            $this->curl->setHeader('Accept-Language', $language);
-        }
-
-        return $this;
-    }
-
-
     /**
      * Get the Taiga auth token.
      *
-     * @param       $baseUrl     the taiga API base url
-     * @param array $credentials the credentials used to generate the token
+     * @param $baseUrl the taiga API base url
+     * @param array $credentials the credentials used to generete the token
      *
      * @throws TaigaException
      *
@@ -89,18 +61,64 @@ class Taiga extends RestClient
         return $curl->response->auth_token;
     }
 
-
     public function __call($name, $params = [])
     {
-        if ($name === 'setAuthToken') {
-            return $this->setAuthToken(! empty($params) ? $params[0] : null);
-        } elseif ($name === 'setLanguage') {
-            return $this->setLanguage(! empty($params) ? $params[0] : null);
+        // If we call a method used to set HTTP headers.
+        if(strpos($name, 'set') !== false) {
+            // Remove the 'set' word from the method name.
+            $name = substr($name, strlen('set'));
+            $header = $this->getHeaderName($name);
+
+            if(!isset($params[0]) || (isset($params[0]) && !trim($params[0]))) {
+                throw new TaigaException("The header '$header' cannot be set because there is no value given.");
+            }
+
+            $headerValue = trim($params[0]);
+
+            $headerMap = $this->getHeaderMap();
+            $name = strtolower($name);
+
+            if(isset($headerMap[$name])) {
+                $header = $headerMap[$name]['header'];
+
+                $prefixValue = '';
+                if(isset($headerMap[$name]['prefix']) 
+                    && !is_null($headerMap[$name]['prefix'])) {
+                    $prefixValue = $headerMap[$name]['prefix'];
+                }
+
+                $headerValue = $prefixValue.$headerValue;
+            }
+
+            $this->curl->setHeader($header, $headerValue);
+
+            return $this;
         }
 
         return $this->getService($name);
     }
 
+    /**
+     * Convert a camelcased string to a valid HTTP Header name.
+     * @see http://www.ietf.org/rfc/rfc2616.txt
+     * 
+     * @param string $name
+     *
+     * @return string
+     */
+    protected function getHeaderName($name) {
+        // @see http://stackoverflow.com/questions/4519739/split-camelcase-word-into-words-with-php-preg-match-regular-expression/7729790#7729790
+        $regex = "/(?<=[a-z])(?=[A-Z])| (?<=[A-Z])(?=[A-Z][a-z])/x";
+        $headerParts = preg_split($regex, $name);
+
+        // Format the array to get a well formed header name (split by dashes if needed).
+        // We do not need to worry about the writing since HTTP header field names are case-insensitive according to RFC-2616
+        return implode('-', $headerParts);
+    }
+
+    protected function getHeaderMap() {
+        return array_change_key_case(static::$HEADER_MAP, CASE_LOWER);
+    }
 
     private function getService($name)
     {
@@ -108,5 +126,9 @@ class Taiga extends RestClient
             return $this->services[$name];
         }
         throw new TaigaException("The service $name is not defined");
+    }
+
+    public function curl() {
+        return $this->curl;
     }
 }
