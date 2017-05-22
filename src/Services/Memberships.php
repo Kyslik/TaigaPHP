@@ -14,7 +14,7 @@ class Memberships extends Service
     }
 
 
-    public function getList(array $param)
+    public function getList(array $param = [])
     {
         return $this->get(null, $param);
     }

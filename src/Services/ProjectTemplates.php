@@ -12,7 +12,7 @@ class ProjectTemplates extends Service
         parent::__construct($taiga, 'project-templates');
     }
 
-    public function getList(array $param)
+    public function getList(array $param = [])
     {
         return $this->get(null, $param);
     }
